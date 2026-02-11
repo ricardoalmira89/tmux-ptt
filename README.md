@@ -119,6 +119,18 @@ run-shell '~/tmux-ptt/ptt.tmux'
 
 Reload: `tmux source-file ~/.tmux.conf`
 
+## Changing the PTT key
+
+By default, the plugin uses `F9` to toggle recording. To use a different key, add this to your `~/.tmux.conf` **before** the plugin is loaded:
+
+```tmux
+set -g @ptt-key 'C-p'       # Ctrl+P
+```
+
+Common key formats: `F1`&ndash;`F12`, `C-x` (Ctrl+x), `M-x` (Alt+x), `C-M-x` (Ctrl+Alt+x).
+
+Reload after changing: `tmux source-file ~/.tmux.conf`
+
 ## Status bar setup
 
 Add `#{E:@ptt_badge}` to your `status-right` (or `status-left`) where you want the badge to appear:
