@@ -49,25 +49,52 @@ cleanup() {
 }
 
 # --- Wait for silence after speech (auto-stop mode) ---
-# Monitors ffmpeg silencedetect output. Triggers when silence_start
-# appears with a timestamp >= 3 seconds (skips initial silence).
+# Monitors ffmpeg silencedetect output. Waits until silence_start appears
+# and persists (no new silence_end after it) for at least 1 polling cycle.
+# Skips initial silence by requiring silence_start timestamp > 0.5s.
 wait_for_silence() {
   local ffmpeg_pid="$1"
-  local silence_dur
-  silence_dur="$(get_tmux_option "@ptt-silence-duration" "2")"
-  # min_time must be > silence_dur to skip the initial silence event
-  local min_time=$(( silence_dur + 1 ))
+  local confirmed_ts=""
 
   while kill -0 "$ffmpeg_pid" 2>/dev/null; do
-    sleep 0.3
-    local last_line
-    last_line=$(grep "silence_start" "$LOGFILE" 2>/dev/null | tail -1)
-    if [ -n "$last_line" ]; then
-      local last_ts
-      last_ts=$(echo "$last_line" | sed -E 's/.*silence_start: ([0-9]+(\.[0-9]+)?).*/\1/' | cut -d. -f1)
-      if [ -n "$last_ts" ] && [ "$last_ts" -ge "$min_time" ] 2>/dev/null; then
+    sleep 0.5
+
+    # Get the last silence_start timestamp
+    local last_start_ts
+    last_start_ts=$(grep "silence_start" "$LOGFILE" 2>/dev/null | tail -1 \
+      | sed -E 's/.*silence_start: ([0-9]+(\.[0-9]+)?).*/\1/')
+
+    # Skip if no silence_start yet or if it's initial silence (~0)
+    if [ -z "$last_start_ts" ]; then
+      confirmed_ts=""
+      continue
+    fi
+    if ! awk "BEGIN {exit !($last_start_ts > 0.5)}" 2>/dev/null; then
+      confirmed_ts=""
+      continue
+    fi
+
+    # Get the last silence_end timestamp (if any)
+    local last_end_ts
+    last_end_ts=$(grep "silence_end" "$LOGFILE" 2>/dev/null | tail -1 \
+      | sed -E 's/.*silence_end: ([0-9]+(\.[0-9]+)?).*/\1/')
+
+    # Check if silence_start is newer than silence_end (still in silence)
+    local in_silence=false
+    if [ -z "$last_end_ts" ]; then
+      in_silence=true
+    elif awk "BEGIN {exit !($last_start_ts > $last_end_ts)}" 2>/dev/null; then
+      in_silence=true
+    fi
+
+    if $in_silence; then
+      if [ "$confirmed_ts" = "$last_start_ts" ]; then
+        # Same silence persisted across two polls — confirmed real silence
         return 0
       fi
+      confirmed_ts="$last_start_ts"
+    else
+      confirmed_ts=""
     fi
   done
 
