@@ -204,6 +204,10 @@ set -g @ptt-transcribing-text '...'
 - Check connectivity: `curl -s https://api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY" | head -c 100`
 - Set the key in tmux: `set -g @ptt-openai-key "sk-..."`
 
+## Disclaimer
+
+This project was entirely written by AI using [Claude Code](https://claude.ai/), Anthropic's CLI coding agent. No line of code was manually written by a human. While it has been tested and works as intended, please review the code before using it in your workflow. AI-generated code may contain subtle bugs or edge cases that were not caught during development. Use at your own risk.
+
 ## License
 
 [MIT](LICENSE)
