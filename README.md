@@ -163,7 +163,7 @@ All options are set via tmux's `set -g @option value` syntax.
 | `@ptt-recording-text` | `Recording` | Badge text while recording |
 | `@ptt-transcribing-text` | `Transcribing` | Badge text while transcribing |
 | `@ptt-auto-stop` | `off` | `on` to auto-stop when you stop speaking |
-| `@ptt-silence-duration` | `2` | Seconds of silence before auto-stop triggers |
+| `@ptt-silence-duration` | `1` | Seconds of silence before auto-stop triggers |
 | `@ptt-silence-threshold` | `-20` | Noise threshold in dB for silence detection |
 | `@ptt-silence-boost` | `0` | Audio boost in dB before silence detection (for quiet mics) |
 | `@ptt-auto-enter` | `off` | `on` to automatically press Enter after pasting text |
@@ -194,7 +194,7 @@ Enable auto-stop to let the plugin detect when you finish speaking. The recordin
 set -g @ptt-auto-stop 'on'
 
 # Optional: adjust silence sensitivity
-set -g @ptt-silence-duration '3'    # wait 3 seconds of silence (default: 2)
+set -g @ptt-silence-duration '2'    # wait 2 seconds of silence (default: 1)
 set -g @ptt-silence-threshold '-15' # less sensitive to quiet sounds (default: -20)
 ```
 

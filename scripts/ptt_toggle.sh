@@ -34,7 +34,11 @@ set_badge() {
 }
 
 clear_badge() {
-  tmux set -gq @ptt_badge ""
+  if [ "$(get_tmux_option "@ptt-auto-enter" "off")" = "on" ]; then
+    tmux set -gq @ptt_badge "#[fg=black,bg=white,bold] PTT ⏎ #[fg=default,bg=default,none]"
+  else
+    tmux set -gq @ptt_badge "#[fg=black,bg=white,bold] PTT #[fg=#cccccc]⏎ #[fg=default,bg=default,none]"
+  fi
   tmux refresh-client -S 2>/dev/null || true
 }
 
@@ -49,14 +53,21 @@ cleanup() {
 # appears with a timestamp >= 3 seconds (skips initial silence).
 wait_for_silence() {
   local ffmpeg_pid="$1"
-  local min_time=3
+  local silence_dur
+  silence_dur="$(get_tmux_option "@ptt-silence-duration" "2")"
+  # min_time must be > silence_dur to skip the initial silence event
+  local min_time=$(( silence_dur + 1 ))
 
   while kill -0 "$ffmpeg_pid" 2>/dev/null; do
     sleep 0.3
-    local last_ts
-    last_ts=$(grep "silence_start" "$LOGFILE" 2>/dev/null | tail -1 | sed -E 's/.*silence_start: ([0-9]+).*/\1/')
-    if [ -n "$last_ts" ] && [ "$last_ts" -ge "$min_time" ] 2>/dev/null; then
-      return 0
+    local last_line
+    last_line=$(grep "silence_start" "$LOGFILE" 2>/dev/null | tail -1)
+    if [ -n "$last_line" ]; then
+      local last_ts
+      last_ts=$(echo "$last_line" | sed -E 's/.*silence_start: ([0-9]+(\.[0-9]+)?).*/\1/' | cut -d. -f1)
+      if [ -n "$last_ts" ] && [ "$last_ts" -ge "$min_time" ] 2>/dev/null; then
+        return 0
+      fi
     fi
   done
 
@@ -86,7 +97,7 @@ start_recording() {
     ffmpeg*)
       if $use_auto_stop; then
         local silence_dur silence_thresh silence_boost
-        silence_dur="$(get_tmux_option "@ptt-silence-duration" "2")"
+        silence_dur="$(get_tmux_option "@ptt-silence-duration" "1")"
         silence_thresh="$(get_tmux_option "@ptt-silence-threshold" "-20")"
         silence_boost="$(get_tmux_option "@ptt-silence-boost" "0")"
         > "$LOGFILE"
@@ -107,7 +118,7 @@ start_recording() {
   echo $! > "$PIDFILE"
   local rec_text
   rec_text="$(get_tmux_option "@ptt-recording-text" "Recording")"
-  set_badge "$rec_text" "red"
+  set_badge "🔴 $rec_text" "red"
 
   # Auto-stop: wait for silence, then transcribe
   if $use_auto_stop; then
@@ -151,7 +162,7 @@ stop_and_transcribe() {
   # Update indicator
   local trans_text
   trans_text="$(get_tmux_option "@ptt-transcribing-text" "Transcribing")"
-  set_badge "$trans_text" "#d75f00"
+  set_badge "✏️ $trans_text" "#d75f00"
 
   # Transcribe
   "$CURRENT_DIR/transcribe.sh" "$WAV" "$OUTBASE" "$PTT_LANG" "$PTT_BACKEND"
