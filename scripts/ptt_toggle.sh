@@ -171,6 +171,11 @@ stop_and_transcribe() {
   # Paste into active pane
   tmux set-buffer -- "$text"
   tmux paste-buffer -d
+
+  # Auto-enter: send Enter key after pasting
+  if [ "$(get_tmux_option "@ptt-auto-enter" "off")" = "on" ]; then
+    tmux send-keys Enter
+  fi
 }
 
 # --- Main toggle ---

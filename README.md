@@ -166,6 +166,7 @@ All options are set via tmux's `set -g @option value` syntax.
 | `@ptt-silence-duration` | `2` | Seconds of silence before auto-stop triggers |
 | `@ptt-silence-threshold` | `-20` | Noise threshold in dB for silence detection |
 | `@ptt-silence-boost` | `0` | Audio boost in dB before silence detection (for quiet mics) |
+| `@ptt-auto-enter` | `off` | `on` to automatically press Enter after pasting text |
 
 ### Example
 
