@@ -7,6 +7,7 @@ tmux-ptt is a tmux plugin that adds voice-to-text input. Press a key to start re
 ## Features
 
 - **Push-to-talk toggle** &mdash; single key to start/stop recording
+- **Auto-stop mode** &mdash; automatically stops recording when you stop speaking (voice activity detection via ffmpeg)
 - **Instant status badge** &mdash; colored indicator in the status bar (red = recording, orange = transcribing)
 - **Two transcription backends** &mdash; local whisper.cpp or OpenAI API
 - **Cross-platform audio** &mdash; Linux (PulseAudio, ALSA) and macOS (AVFoundation)
@@ -161,6 +162,9 @@ All options are set via tmux's `set -g @option value` syntax.
 | `@ptt-openai-key` | `$OPENAI_API_KEY` | OpenAI API key |
 | `@ptt-recording-text` | `Recording` | Badge text while recording |
 | `@ptt-transcribing-text` | `Transcribing` | Badge text while transcribing |
+| `@ptt-auto-stop` | `off` | `on` to auto-stop when you stop speaking |
+| `@ptt-silence-duration` | `2` | Seconds of silence before auto-stop triggers |
+| `@ptt-silence-threshold` | `-30` | Noise threshold in dB for silence detection |
 
 ### Example
 
@@ -180,7 +184,25 @@ set -g @ptt-recording-text 'REC'
 set -g @ptt-transcribing-text '...'
 ```
 
+### Auto-stop mode
+
+Enable auto-stop to let the plugin detect when you finish speaking. The recording stops automatically after a period of silence, so you only need to press the key once to start:
+
+```tmux
+set -g @ptt-auto-stop 'on'
+
+# Optional: adjust silence sensitivity
+set -g @ptt-silence-duration '3'    # wait 3 seconds of silence (default: 2)
+set -g @ptt-silence-threshold '-25' # less sensitive to quiet sounds (default: -30)
+```
+
+Auto-stop requires ffmpeg as the audio recorder. If you use SoX (`rec`), auto-stop is not available and the plugin falls back to manual toggle mode.
+
+You can still press the key during recording to stop it manually, overriding auto-stop.
+
 ## How it works
+
+### Manual mode (default)
 
 1. **Press the PTT key** &mdash; ffmpeg starts recording audio (16 kHz, mono, 16-bit WAV)
 2. **Status badge turns red** &mdash; shows "Recording" in the status bar
@@ -188,6 +210,14 @@ set -g @ptt-transcribing-text '...'
 4. **Transcription runs** &mdash; whisper.cpp or OpenAI API processes the audio
 5. **Text is pasted** &mdash; transcribed text goes directly into the active pane
 6. **Badge disappears** &mdash; status bar returns to normal
+
+### Auto-stop mode
+
+1. **Press the PTT key** &mdash; recording starts with voice activity detection enabled
+2. **Speak normally** &mdash; the plugin listens for your voice
+3. **Stop speaking** &mdash; after the configured silence duration (default: 2 seconds), recording stops automatically
+4. **Transcription runs** &mdash; same as manual mode
+5. **Text is pasted** &mdash; no second keypress needed
 
 ## Troubleshooting
 

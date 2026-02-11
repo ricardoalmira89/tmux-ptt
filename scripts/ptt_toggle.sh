@@ -11,6 +11,7 @@ source "$CURRENT_DIR/detect_audio.sh"
 # --- Read config ---
 PTT_LANG="$(get_tmux_option "@ptt-lang" "en")"
 PTT_BACKEND="$(get_tmux_option "@ptt-backend" "auto")"
+PTT_AUTO_STOP="$(get_tmux_option "@ptt-auto-stop" "off")"
 
 # --- State files ---
 PIDFILE="$(ptt_pidfile)"
@@ -18,6 +19,7 @@ BUSYFILE="$(ptt_busyfile)"
 WAV="$(ptt_wavfile)"
 OUTBASE="$(ptt_outbase)"
 TXT="$(ptt_txtfile)"
+LOGFILE="$(ptt_logfile)"
 
 # --- Guard: ignore keypress during transcription ---
 if [ -f "$BUSYFILE" ]; then
@@ -38,16 +40,40 @@ clear_badge() {
 
 # --- Cleanup on exit ---
 cleanup() {
-  rm -f "$BUSYFILE"
+  rm -f "$BUSYFILE" "$LOGFILE"
   clear_badge
+}
+
+# --- Wait for silence after speech (auto-stop mode) ---
+# Monitors ffmpeg silencedetect output. Triggers when silence_start
+# appears with a timestamp >= 3 seconds (skips initial silence).
+wait_for_silence() {
+  local ffmpeg_pid="$1"
+  local min_time=3
+
+  while kill -0 "$ffmpeg_pid" 2>/dev/null; do
+    sleep 0.3
+    local last_ts
+    last_ts=$(grep "silence_start" "$LOGFILE" 2>/dev/null | tail -1 | sed -E 's/.*silence_start: ([0-9]+).*/\1/')
+    if [ -n "$last_ts" ] && [ "$last_ts" -ge "$min_time" ] 2>/dev/null; then
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 # --- Start recording ---
 start_recording() {
-  rm -f "$WAV" "$TXT"
+  rm -f "$WAV" "$TXT" "$LOGFILE"
 
   local audio_cmd
   audio_cmd="$(detect_audio_source)"
+
+  local use_auto_stop=false
+  if [ "$PTT_AUTO_STOP" = "on" ] && [[ "$audio_cmd" == ffmpeg* ]]; then
+    use_auto_stop=true
+  fi
 
   case "$audio_cmd" in
     error:*)
@@ -58,8 +84,23 @@ start_recording() {
       rec -q -c 1 -r 16000 -b 16 "$WAV" >/dev/null 2>&1 &
       ;;
     ffmpeg*)
-      $audio_cmd -hide_banner -loglevel error \
-        -ac 1 -ar 16000 -y "$WAV" >/dev/null 2>&1 &
+      if $use_auto_stop; then
+        local silence_dur silence_thresh silence_boost
+        silence_dur="$(get_tmux_option "@ptt-silence-duration" "2")"
+        silence_thresh="$(get_tmux_option "@ptt-silence-threshold" "-20")"
+        silence_boost="$(get_tmux_option "@ptt-silence-boost" "0")"
+        > "$LOGFILE"
+        local af_filter="silencedetect=noise=${silence_thresh}dB:d=${silence_dur}"
+        if [ "$silence_boost" != "0" ]; then
+          af_filter="volume=${silence_boost}dB,${af_filter}"
+        fi
+        $audio_cmd -hide_banner -loglevel info \
+          -af "$af_filter" \
+          -ac 1 -ar 16000 -y "$WAV" 2>"$LOGFILE" &
+      else
+        $audio_cmd -hide_banner -loglevel error \
+          -ac 1 -ar 16000 -y "$WAV" >/dev/null 2>&1 &
+      fi
       ;;
   esac
 
@@ -67,6 +108,20 @@ start_recording() {
   local rec_text
   rec_text="$(get_tmux_option "@ptt-recording-text" "Recording")"
   set_badge "$rec_text" "red"
+
+  # Auto-stop: wait for silence, then transcribe
+  if $use_auto_stop; then
+    local ffmpeg_pid
+    ffmpeg_pid="$(cat "$PIDFILE")"
+
+    if wait_for_silence "$ffmpeg_pid"; then
+      # Silence detected after speech — auto-stop
+      if [ ! -f "$BUSYFILE" ] && [ -f "$PIDFILE" ]; then
+        stop_and_transcribe
+      fi
+    fi
+    # If ffmpeg died (manual override or error), just exit
+  fi
 }
 
 # --- Stop recording and transcribe ---

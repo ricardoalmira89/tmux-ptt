@@ -38,3 +38,4 @@ ptt_wavfile()   { echo "$(ptt_state_dir)/rec.wav"; }
 ptt_outbase()   { echo "$(ptt_state_dir)/out"; }
 ptt_txtfile()   { echo "$(ptt_state_dir)/out.txt"; }
 ptt_statefile() { echo "$(ptt_state_dir)/state"; }
+ptt_logfile()   { echo "$(ptt_state_dir)/ffmpeg.log"; }
