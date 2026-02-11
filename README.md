@@ -164,7 +164,8 @@ All options are set via tmux's `set -g @option value` syntax.
 | `@ptt-transcribing-text` | `Transcribing` | Badge text while transcribing |
 | `@ptt-auto-stop` | `off` | `on` to auto-stop when you stop speaking |
 | `@ptt-silence-duration` | `2` | Seconds of silence before auto-stop triggers |
-| `@ptt-silence-threshold` | `-30` | Noise threshold in dB for silence detection |
+| `@ptt-silence-threshold` | `-20` | Noise threshold in dB for silence detection |
+| `@ptt-silence-boost` | `0` | Audio boost in dB before silence detection (for quiet mics) |
 
 ### Example
 
@@ -193,12 +194,38 @@ set -g @ptt-auto-stop 'on'
 
 # Optional: adjust silence sensitivity
 set -g @ptt-silence-duration '3'    # wait 3 seconds of silence (default: 2)
-set -g @ptt-silence-threshold '-25' # less sensitive to quiet sounds (default: -30)
+set -g @ptt-silence-threshold '-15' # less sensitive to quiet sounds (default: -20)
 ```
 
 Auto-stop requires ffmpeg as the audio recorder. If you use SoX (`rec`), auto-stop is not available and the plugin falls back to manual toggle mode.
 
 You can still press the key during recording to stop it manually, overriding auto-stop.
+
+#### Microphone volume
+
+Auto-stop works best when your microphone volume is high enough for ffmpeg to distinguish between speech and silence. If auto-stop is not detecting when you stop speaking, increase your mic volume:
+
+```bash
+# Linux (PulseAudio/PipeWire)
+pactl set-source-volume @DEFAULT_SOURCE@ 150%
+
+# Check current level
+pactl get-source-volume @DEFAULT_SOURCE@
+```
+
+Alternatively, you can boost the audio signal internally without changing your system volume:
+
+```tmux
+set -g @ptt-silence-boost '20'   # amplify 20dB before silence detection
+```
+
+To find the right threshold for your setup, record a short test and check your actual audio levels:
+
+```bash
+ffmpeg -f pulse -i default -t 5 -af "volumedetect" -f null /dev/null 2>&1 | grep max_volume
+```
+
+Set `@ptt-silence-threshold` to a value below your speech level but above your ambient noise.
 
 ## How it works
 
